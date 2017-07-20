@@ -1,5 +1,5 @@
 % 重置matlab环境
-clear; clc;
+clear; clc;close all ;
 
 % 加入工具包
 addpath('./utilities');
@@ -43,7 +43,7 @@ for camIdx = 1:nCam % 相机索引
    % dir('G:\Matlab')列出指定目录下所有子文件夹和文件
    % 图片数目 2xlog2(width) + 2xlog2(height) + 2  = 42 故 nBitPlanes{camIdx} = 10
    I = imread([dataDir,'01.bmp']);
-   camDim{camIdx} = [size(I,1) size(I,2)];
+   camDim{camIdx} = [size(I,1) size(I,2)]; % 1200 X 1600
 end
 width = camDim{1}(2); % 摄像机捕捉的图像分辨率 1200 X 1600
 height = camDim{1}(1);
