@@ -22,30 +22,28 @@ distReject  = Inf;      % rejection distance (for outlier removal)
 
 % 加载系统标定参数
 load('./calib/calib_results/calib_cam_proj.mat');
-  
+ 
 % 提示开始扫描
 clc; disp('[Reconstruction of Structured Light Sequences]');
 
 % 确定相机的数量和图像分辨率
 disp('+ Extracting data set properties...');
 D = dir(['./data/',seqType,'/',objName]);
-% matlab中使用isdir时为什么要减2才能得到文件数量？
-% 因为在我们使用的文件系统中，每个文件夹下都默认含有“.”,“..”两个隐藏的系统文件夹，前者指向该文件夹，后者指向该文件夹的父文件夹，所以要减去2
-nCam = nnz([D.isdir])-2;  % number of camera 相机数量 1 ，[D.isdir]中不为0的元素个数为 1 
-% disp(['+ nCam = ',int2str(nCam)]);
-nBitPlanes = cell(1,nCam); % 照明平面，创建一个空的1x1的cell矩阵,存储不同的数据类型
+% 每个文件夹下都默认含有“.”,“..”两个隐藏的系统文件夹，前者指向该文件夹，后者指向该文件夹的父文件夹，所以要减去2
+nCam = nnz([D.isdir])-2;  % 相机数量 1 ，[D.isdir]中不为0的元素个数为 1 
+nBitPlanes = cell(1,nCam); % n位面
 camDim = cell(1,nCam);
 for camIdx = 1:nCam % 相机索引
-   dataDir = ['./data/',seqType,'/',objName,'/v',int2str(camIdx),'/'];
-   % disp(dataDir);
-   nBitPlanes{camIdx} = ((length(dir(dataDir))-2)-2)/4; % 10 
+   dataDir = ['./data/',seqType,'/',objName,'/v',int2str(camIdx),'/']; % ./data/Gray/man/v1/
+   nBitPlanes{camIdx} = ((length(dir(dataDir))-2)-2)/4; % 先去掉两隐藏文件夹，再去掉全黑全白，因有横纵两个方向除以2
    % length(dir(dataDir)) = 44
    % dir('G:\Matlab')列出指定目录下所有子文件夹和文件
    % 图片数目 2xlog2(width) + 2xlog2(height) + 2  = 42 故 nBitPlanes{camIdx} = 10
    I = imread([dataDir,'01.bmp']);
    camDim{camIdx} = [size(I,1) size(I,2)]; % 1200 X 1600
 end
-width = camDim{1}(2); % 摄像机捕捉的图像分辨率 1200 X 1600
+% 摄像机捕捉的图像分辨率 1200 X 1600
+width = camDim{1}(2); 
 height = camDim{1}(1);
 disp(['+ The large of image is ',int2str(height),' X ',int2str(width)]);
 
@@ -56,7 +54,7 @@ disp(['+ The large of image is ',int2str(height),' X ',int2str(width)]);
 %       J{j,i} are the OpenGL textures of the inverse of I{j,i}.
 disp('+ Regenerating structured light sequence...');
 if strcmp(seqType,'Gray') %strcmp是用于做字符串比较的函数
-   [P,offset] = graycode(1024/dSampleProj,768/dSampleProj);  % 投影图案的大小 1024 X 768
+   [P,offset] = graycode(1024/dSampleProj,768/dSampleProj);  % 编码投影图案,大小 1024 X 768
 else
    [P,offset] = bincode(1024/dSampleProj,768/dSampleProj);
 end
@@ -69,17 +67,17 @@ for camIdx = 1:nCam %  nCam = 1
       error(['Sequence ',objName,'_',seqName,'_',seqType,' is not available!']);
    end
    % 前两张全白和全黑照片
-   T{1}{camIdx} = imread([dataDir,num2str(1,'%0.02d'),'.bmp']); % 全白
-   T{2}{camIdx} = imread([dataDir,num2str(2,'%0.02d'),'.bmp']); % 全黑
+   T{1}{camIdx} = imread([dataDir,num2str(1,'%0.02d'),'.bmp']); % 全白 01.bmp
+   T{2}{camIdx} = imread([dataDir,num2str(2,'%0.02d'),'.bmp']); % 全黑 02.bmp
    % 剩余的行列照片
    frameIdx = 3;
-   for j = 1:2
-      for i = 1:nBitPlanes{camIdx}        % nBitPlanes{camIdx} = 10 
+   for j = 1:2 % j 方向
+      for i = 1:nBitPlanes{camIdx}        % nBitPlanes{camIdx} = 10 位面 
          A{j,i}{camIdx} = imread([dataDir,num2str(frameIdx,'%0.02d'),'.bmp']);
          frameIdx = frameIdx + 1;
          B{j,i}{camIdx} = imread([dataDir,num2str(frameIdx,'%0.02d'),'.bmp']);
          frameIdx = frameIdx + 1;
-         % A、B 对应的图片互补
+         % A、B 对应的图片互补 组成10对图像对
          % A{1，1} = 03.bmp B{1，1} = 04.bmp 
          % A{1，2} = 05.bmp B{1，2} = 06.bmp
          % ....
@@ -109,10 +107,10 @@ for k = 1:nCam
       % 数组T{1}{1}（全白图像）的一、二维方向长度 ， 数组A{2,10}的二维方向长度
       G{j,k} = zeros(size(T{1}{1},1),size(T{1}{1},2),size(A,2),'uint8'); % 1200 x 1600 x 10 uint8
       M{j,k} = false(size(T{1}{1},1),size(T{1}{1},2)); % 逻辑0矩阵 1200 x 1600 logical
-      for i = 1:size(A,2) % 10
-         % Convert image pair to grayscale.
-         %grayA = rgb2gray(im2double(A{j,i}{k}));
-         %grayB = rgb2gray(im2double(B{j,i}{k}));
+      for i = 1:size(A,2) % 10位面
+         % Convert image pair to grayscale. 转换图像对到格雷码
+         % grayA = rgb2gray(im2double(A{j,i}{k}));
+         % grayB = rgb2gray(im2double(B{j,i}{k}));
          % imlincomb 线性组合
          % C(1) = 0.2989
          % C(2) = 0.5870
@@ -126,59 +124,63 @@ for k = 1:nCam
          grayB = imlincomb(C(1),B{j,i}{k}(:,:,1),...
                            C(2),B{j,i}{k}(:,:,2),...
                            C(3),B{j,i}{k}(:,:,3),'double');
-         
+
+         % imshow(grayA);
+         % imshow(grayB);
+         % image = grayA-grayB;
+         % absimage = abs(grayA-grayB);
+         % imshow(grayA-grayB);
+         % imshow(abs(grayA-grayB));
          % Eliminate all pixels that do not exceed contrast threshold.
-         % 超过对比度阈值的所有像素赋值为true
-         M{j,k}(abs(grayA-grayB) > 255*minContrast) = true;
-         
+         % 超过对比度阈值51的位置赋值为true
+         M{j,k}(abs(grayA-grayB) > 255*minContrast) = true; % {[1200x1600 logical' char(10) ']}   
          % Estimate current bit of Gray code from image pair. 
-         % 估计 图像对 当前的格雷码
-         bitPlane = zeros(size(T{1}{1},1),size(T{1}{1},2),'uint8');
-         % 1200 x 1600 uint8
+         % 估计 当前图像对 的格雷码位面
+         bitPlane = zeros(size(T{1}{1},1),size(T{1}{1},2),'uint8');  % 1200 x 1600 uint8
          % temp = grayA(:,:) >= grayB(:,:); % 1200 x 1600 logical
-         bitPlane(grayA(:,:) >= grayB(:,:)) = 1; 
-         G{j,k}(:,:,i) = bitPlane;   
+         bitPlane(grayA(:,:) >= grayB(:,:)) = 1; % 以 03.bmp 05.bmp ... 21.bmp 即A组为准
+         G{j,k}(:,:,i) = bitPlane;  % 得到第i幅位面，共10位面 
       end
       if strcmp(seqType,'Gray')
-         D{j,k} = gray2dec(G{j,k})-offset(j);
+         D{j,k} = gray2dec(G{j,k})-offset(j); % 解码 1200X1600X10 格雷码 转1200X1600 十进制
       else
          D{j,k} = bin2dec(G{j,k})-offset(j);
       end
-      D{j,k}(~M{j,k}) = NaN;
+      D{j,k}(~M{j,k}) = NaN; % 不满足行或者列单一掩码要求的全都赋值NaN
    end
 end
 %clear A B G grayA grayB bitPlane;
 
-% Eliminate invalid column/row estimates. 消除无效的列/行估计
+% Eliminate invalid column/row estimates. 消除无效的列/行估计（超出编码图案1024X768大小）
 % Note: This will exclude pixels if either the column or row is missing.
 %       D{j,k} is the column/row for "orientation" j and camera k.
 %       mask{k} is the overal per-pixel mask for camera k.
 mask = cell(1,nCam);
-for k = 1:nCam
-   mask{k} = M{1,k};
+for k = 1:nCam % k=1
+   mask{k} = M{1,k}; % mask初始化为单一掩码，此时M{j,k}是行列方向的最后一个位面的掩码
    for j = 1:size(D,1)
       if j == 1
-         D{j,k}(D{j,k} > width) = NaN;
+         D{j,k}(D{j,k} > width) = NaN; % 列方向和宽度比较
       else
-         D{j,k}(D{j,k} > height) = NaN;
+         D{j,k}(D{j,k} > height) = NaN; % 行方向和高度作比较
       end
-      D{j,k}(D{j,k} < 1) = NaN;
-      for i = 1:size(D,1)
-         D{j,k}(~M{i,k}) = NaN;
-         mask{k} =  mask{k} & M{i,k};
+      D{j,k}(D{j,k} < 1) = NaN; % 十进制索引不可能小于1
+      for i = 1:size(D,1) % 2
+         D{j,k}(~M{i,k}) = NaN; % 不满足行列两个掩码要求的全都赋值NaN
+         mask{k} =  mask{k} & M{i,k}; % mask 为双掩码
       end
    end
 end
 
 % Display recovered projector column/row.
 figure(1); clf;
-imagesc(D{1,1}); axis image; colormap(jet(256));
+imagesc(D{1,1}); axis image; colormap(jet(256)); % 列
 title('Recovered Projector Column Indices'); drawnow;
 figure(2); clf;
-imagesc(D{2,1}); axis image; colormap(jet(256));
+imagesc(D{2,1}); axis image; colormap(jet(256)); % 行
 title('Recovered Projector Row Indices'); drawnow;
 figure(3); clf;
-imagesc(T{1}{1}); axis image; colormap(jet(256));
+imagesc(T{1}{1}); axis image; colormap(jet(256)); % 全白图像
 title('Reference Image for Texture Mapping'); drawnow;
 
 
@@ -191,13 +193,13 @@ vertices = cell(1,length(Nc));
 colors   = cell(1,length(Nc));
 disp('+ Reconstructing 3D points...');
 for i = 1:length(Nc)
-   idx       = find(~isnan(D{1,i}) & ~isnan(D{2,i}));
-   [row,col] = ind2sub(size(D{1,i}),idx);
+   idx       = find(~isnan(D{1,i}) & ~isnan(D{2,i})); % 找到表面点的索引
+   [row,col] = ind2sub(size(D{1,i}),idx); % 索引转换成下标
    npts      = length(idx);
    colors{i} = 0.65*ones(npts,3);
    Rc        = im2double(T{1}{i}(:,:,1));
    Gc        = im2double(T{1}{i}(:,:,2));
-   Bc        = im2double(T{1}{i}(:,:,3));
+   Bc        = im2double(T{1}{i}(:,:,3)); % 颜色
    vV = intersectLineWithPlane(repmat(Oc{i},1,npts),Nc{i}(:,idx),wPlaneCol(D{1,i}(idx),:)');
    vH = intersectLineWithPlane(repmat(Oc{i},1,npts),Nc{i}(:,idx),wPlaneRow(D{2,i}(idx),:)');
    vertices{i} = vV';
