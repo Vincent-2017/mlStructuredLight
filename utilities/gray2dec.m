@@ -21,4 +21,4 @@ D = zeros(height,width);
 for i = N:-1:1
    D = D + 2^(N-i)*double(B(:,:,i));
 end
-D = D + 1;
+D = D + 1; % ???

@@ -139,6 +139,7 @@ for k = 1:nCam
          bitPlane = zeros(size(T{1}{1},1),size(T{1}{1},2),'uint8');  % 1200 x 1600 uint8
          % temp = grayA(:,:) >= grayB(:,:); % 1200 x 1600 logical
          bitPlane(grayA(:,:) >= grayB(:,:)) = 1; % 以 03.bmp 05.bmp ... 21.bmp 即A组为准
+         % imshow(bitPlane);
          G{j,k}(:,:,i) = bitPlane;  % 得到第i幅位面，共10位面 
       end
       if strcmp(seqType,'Gray')
